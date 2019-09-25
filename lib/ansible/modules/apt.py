@@ -51,6 +51,14 @@ options:
     type: int
     default: 12
     version_added: '2.10'
+  allow_releaseinfo_change:
+    description:
+      - This option is only used if update_cache is yes/true
+      - Auto accept if release info has changed.
+      - Corresponds to --allow-releaseinfo-change
+    type: bool
+    default: 'no'
+    version_added: "2.11"
   cache_valid_time:
     description:
       - Update the apt cache if it is older than the I(cache_valid_time). This option is set in seconds.
@@ -246,6 +254,11 @@ EXAMPLES = '''
     upgrade: dist
     update_cache: yes
     dpkg_options: 'force-confold,force-confdef'
+
+- name: Update the cache after the repository's releaseinfo has changed
+  apt:
+    update_cache: yes
+    allow_releaseinfo_change: yes
 
 - name: Install a .deb package
   apt:
@@ -1063,6 +1076,7 @@ def main():
             update_cache=dict(type='bool', aliases=['update-cache']),
             update_cache_retries=dict(type='int', default=5),
             update_cache_retry_max_delay=dict(type='int', default=12),
+            allow_releaseinfo_change=dict(type='bool', default=False),
             cache_valid_time=dict(type='int', default=0),
             purge=dict(type='bool', default=False),
             package=dict(type='list', elements='str', aliases=['pkg', 'name']),
@@ -1125,7 +1139,10 @@ def main():
             module.warn("Auto-installing missing dependency without updating cache: %s" % apt_pkg_name)
         else:
             module.warn("Updating cache and auto-installing missing dependency: %s" % apt_pkg_name)
-            module.run_command(['apt-get', 'update'], check_rc=True)
+            if allow_releaseinfo_change:
+                module.run_command(['apt-get', 'update', '--allow-releaseinfo-change'], check_rc=True)
+            else:
+                module.run_command(['apt-get', 'update'], check_rc=True)
 
         # try to install the apt Python binding
         module.run_command(['apt-get', 'install', '--no-install-recommends', apt_pkg_name, '-y', '-q'], check_rc=True)
@@ -1190,6 +1207,9 @@ def main():
                 err = ''
                 update_cache_retries = module.params.get('update_cache_retries')
                 update_cache_retry_max_delay = module.params.get('update_cache_retry_max_delay')
+                allow_releaseinfo_change = module.params.get('allow_releaseinfo_change')
+                if allow_releaseinfo_change:
+                    apt_pkg.config.set('Acquire::AllowReleaseInfoChange', 'True')
                 randomize = random.randint(0, 1000) / 1000.0
 
                 for retry in range(update_cache_retries):
