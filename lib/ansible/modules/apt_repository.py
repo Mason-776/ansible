@@ -57,6 +57,14 @@ options:
         type: int
         default: 12
         version_added: '2.10'
+    allow_releaseinfo_change:
+        description:
+        - This option is only used if I(update_cache) is yes/true
+        - Auto accept if release info has changed.
+        - Corresponds to --allow-releaseinfo-change
+        type: bool
+        default: "no"
+        version_added: '2.11'
     validate_certs:
         description:
             - If C(no), SSL certificates for the target repo will not be validated. This should only be used
@@ -170,7 +178,10 @@ def install_python_apt(module, apt_pkg_name):
     if not module.check_mode:
         apt_get_path = module.get_bin_path('apt-get')
         if apt_get_path:
-            rc, so, se = module.run_command([apt_get_path, 'update'])
+            if module.params.get('allow_releaseinfo_change'):
+                rc, so, se = module.run_command([apt_get_path, 'update', '--allow-releaseinfo-change'])
+            else:
+                rc, so, se = module.run_command([apt_get_path, 'update'])
             if rc != 0:
                 module.fail_json(msg="Failed to auto-install %s. Error was: '%s'" % (apt_pkg_name, se.strip()))
             rc, so, se = module.run_command([apt_get_path, 'install', apt_pkg_name, '-y', '-q'])
@@ -527,6 +538,7 @@ def main():
             update_cache=dict(type='bool', default=True, aliases=['update-cache']),
             update_cache_retries=dict(type='int', default=5),
             update_cache_retry_max_delay=dict(type='int', default=12),
+            allow_releaseinfo_change=dict(type='bool', default=False),
             filename=dict(type='str'),
             # This should not be needed, but exists as a failsafe
             install_python_apt=dict(type='bool', default=True),
@@ -632,6 +644,8 @@ def main():
                 err = ''
                 update_cache_retries = module.params.get('update_cache_retries')
                 update_cache_retry_max_delay = module.params.get('update_cache_retry_max_delay')
+                if module.params.get('allow_releaseinfo_change'):
+                    apt_pkg.config.set('Acquire::AllowReleaseInfoChange', 'True')
                 randomize = random.randint(0, 1000) / 1000.0
 
                 for retry in range(update_cache_retries):
